@@ -1,12 +1,27 @@
+import os
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "django-insecure-9!^p2zr8m=k$d3v0&xq+1wybho4ag&7lcfu+ej(nti6r%h@m4s"
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    "django-insecure-9!^p2zr8m=k$d3v0&xq+1wybho4ag&7lcfu+ej(nti6r%h@m4s",
+)
 
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "False").lower() in {"1", "true", "yes", "on"}
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
+    if host.strip()
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 
 INSTALLED_APPS = [
@@ -50,16 +65,30 @@ TEMPLATES = [
 WSGI_APPLICATION = "core.wsgi.application"
 
 
-DATABASES = {
-    "default": {
+def _database_config():
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        parsed = urlparse(database_url)
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": parsed.path.lstrip("/"),
+            "USER": unquote(parsed.username or ""),
+            "PASSWORD": unquote(parsed.password or ""),
+            "HOST": parsed.hostname or "",
+            "PORT": str(parsed.port or 5432),
+        }
+
+    return {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "backend_devops_interview",
-        "USER": "postgres",
-        "PASSWORD": "postgres",
-        "HOST": "localhost",
-        "PORT": "5432",
+        "NAME": os.environ.get("POSTGRES_DB", "backend_devops_interview"),
+        "USER": os.environ.get("POSTGRES_USER", "postgres"),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres"),
+        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
     }
-}
+
+
+DATABASES = {"default": _database_config()}
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -76,5 +105,6 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

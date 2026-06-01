@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from ninja import Schema
+from pydantic import Field
 
 
 class AuthorOut(Schema):
@@ -37,7 +38,7 @@ class PostDetailOut(Schema):
     body: str
     author: AuthorOut
     tags: list[TagOut]
-    comments: list[CommentOut]
+    comment_count: int
     view_count: int
     created_at: datetime
     updated_at: datetime
@@ -57,7 +58,7 @@ class PostCreateIn(Schema):
     author_id: int
     title: str
     body: str
-    tag_slugs: list[str] = []
+    tag_slugs: list[str] = Field(default_factory=list)
 
 
 class PostCreateOut(Schema):

@@ -44,4 +44,5 @@ def test_get_post_returns_detail(client, user):
     data = response.json()
     assert data["title"] == "Hello"
     assert data["author"]["username"] == "alice"
-    assert data["comments"] == []
+    assert data["comment_count"] == 0
+    assert "comments" not in data
