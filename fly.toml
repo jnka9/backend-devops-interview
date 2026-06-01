@@ -1,12 +1,12 @@
 app = "backend-devops-interview"
-primary_region = "scl"
+primary_region = "gru"
 
 [build]
   dockerfile = "Dockerfile"
 
 [deploy]
-  release_command = "uv run python manage.py migrate"
-  strategy = "canary"
+  release_command = "uv run --no-sync python manage.py migrate"
+  strategy = "rolling"
 
 [env]
   DEBUG = "False"
@@ -23,7 +23,8 @@ primary_region = "scl"
 
   [[http_service.checks]]
     interval = "15s"
-    timeout = "2s"
-    grace_period = "10s"
+    timeout = "5s"
+    grace_period = "20s"
     method = "GET"
     path = "/healthz"
+    headers = { Host = "backend-devops-interview.fly.dev" }

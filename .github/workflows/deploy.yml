@@ -16,6 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only --strategy canary
+      - run: flyctl deploy --remote-only --depot=false --strategy rolling --wait-timeout 10m
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
