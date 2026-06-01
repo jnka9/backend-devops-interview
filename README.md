@@ -1,66 +1,153 @@
-# Backend/DevOps Engineer Interview
+# Backend DevOps Interview
 
-A small content service: users, posts, comments, tags. Django + Ninja + Postgres.
+Servicio de contenido con usuarios, posts, comentarios y tags.
 
-## Running it locally
+Stack final:
 
-Prereqs:
+- Django 5 + Django Ninja
+- PostgreSQL
+- Docker / Docker Compose
+- Fly.io para despliegue
+- GitHub Actions para CI, CodeQL y deploy
 
-- [mise](https://mise.jdx.dev/) — manages the Python toolchain and uv.
-- A running PostgreSQL 16 instance on `localhost:5432` with a database called `backend_devops_interview` accessible to `postgres`/`postgres`. (Local install, `brew install postgresql@16`, host-mode docker, whatever you have.)
+## Setup local
 
-Steps:
+Crear el archivo de entorno:
 
 ```sh
-mise install
-uv sync
-createdb backend_devops_interview        # or however you create it
-uv run python manage.py migrate
-uv run python manage.py seed
-uv run python manage.py runserver
+cp .env.example .env
 ```
 
-API docs at <http://localhost:8000/api/docs>.
+Levantar app + Postgres con Docker:
 
-Seeding writes ~100k posts and ~500k comments. Expect a few minutes.
+```sh
+docker compose up --build
+```
 
-## What the API does
+La API queda disponible en:
 
-| Method | Path | Description |
+```text
+http://localhost:8000/api/docs
+```
+
+## Comandos Make
+
+```sh
+make setup      # crea .env si falta e instala dependencias con uv
+make up         # levanta Docker Compose
+make down       # detiene Docker Compose
+make migrate    # ejecuta migraciones en Docker
+make seed       # carga el dataset grande
+make test       # corre pytest local con uv
+make lint       # corre ruff local con uv
+make run        # corre runserver local
+make shell      # abre Django shell en Docker
+```
+
+## Comandos Docker utiles
+
+Migraciones:
+
+```sh
+docker compose run --rm app uv run --no-sync python manage.py migrate
+```
+
+Seed grande:
+
+```sh
+docker compose run --rm app uv run --no-sync python manage.py seed
+```
+
+Tests y lint:
+
+```sh
+docker compose run --rm app uv run pytest
+docker compose run --rm app uv run ruff check .
+```
+
+Vaciar la base conectada por `.env`:
+
+```sh
+docker compose run --rm app uv run --no-sync python manage.py flush --noinput
+```
+
+
+## Dataset
+
+El comando `seed` carga aproximadamente:
+
+```text
+1000 usuarios
+50 tags
+100000 posts
+500000 comentarios
+```
+
+En una base remota puede tardar varios minutos. No se ejecuta automaticamente en cada deploy; las migraciones si se ejecutan como release command de Fly.
+
+## API final
+
+Todas las rutas de negocio viven bajo `/api`.
+
+| Method | Path | Descripcion |
 | ------ | ---- | ----------- |
-| GET    | `/api/posts` | Published posts, newest first |
-| GET    | `/api/posts/search?q=` | Full-text-ish search across title and body |
-| GET    | `/api/posts/by-tag/{slug}` | Posts carrying a given tag |
-| GET    | `/api/posts/{id}` | Post detail with comments |
-| POST   | `/api/posts` | Create a post |
-| POST   | `/api/posts/{id}/comments` | Add a comment to a post |
-| GET    | `/api/users/{id}` | User profile with post and comment counts |
-| GET    | `/api/users/find?email=` | Look up a user by email |
+| GET | `/healthz` | Health check |
+| GET | `/api/docs` | Documentacion interactiva |
+| GET | `/api/posts?limit=50&offset=0` | Posts publicados, newest first |
+| GET | `/api/posts/search?q=django&limit=50&offset=0` | Busqueda por titulo/body |
+| GET | `/api/posts/by-tag/{slug}?limit=50&offset=0` | Posts por tag |
+| GET | `/api/posts/{post_id}` | Detalle de post sin comentarios anidados |
+| GET | `/api/posts/{post_id}/comments?limit=50&offset=0` | Comentarios paginados del post |
+| POST | `/api/posts` | Crear post |
+| POST | `/api/posts/{post_id}/comments` | Crear comentario |
+| GET | `/api/users/{user_id}` | Detalle de usuario con contadores |
+| GET | `/api/users/find?email=demo@example.com` | Buscar usuario por email |
 
-## The assignment
+Ejemplos:
 
-We want to see how you take a working prototype and turn it into something a team can develop on and operate. Pick the changes that give the strongest signal about how you'd improve this codebase if you owned it. There are three areas we care about:
+```sh
+curl http://localhost:8000/healthz
+curl "http://localhost:8000/api/posts?limit=5"
+curl "http://localhost:8000/api/posts/search?q=django&limit=5"
+curl "http://localhost:8000/api/posts/by-tag/django?limit=5"
+curl "http://localhost:8000/api/posts/1"
+curl "http://localhost:8000/api/posts/1/comments?limit=5"
+```
 
-1. **Developer experience.** Getting this running on a fresh laptop is harder than it should be. Make it easier.
-2. **Performance.** Once the database is seeded, exercise the endpoints. Some of them are slow. Find out why and fix what you can.
-3. **Production readiness.** This service is a long way from something you'd put behind a load balancer. Move it closer — pick whichever deployment target you'd reach for at work (Helm chart, ECS task def, K8s manifests, Fly, Render, plain Docker + systemd — your call).
+## Despliegue en Fly.io
 
-**Depth beats breadth.** Pick 2–3 things and go deep rather than touching ten things shallowly. Write a short `NOTES.md` covering:
+Secrets requeridos:
 
-- What you did and why.
-- What you deliberately *didn't* do.
-- What you'd do next if you had another day.
+```sh
+fly secrets set SECRET_KEY="..."
+fly secrets set DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DB?sslmode=require"
+```
 
-## Non-goals
+Deploy manual:
 
-- **Authentication / authorization** is intentionally absent. If you want to suggest a direction in `NOTES.md`, great — but no need to implement anything.
-- **Test coverage** is not what we're grading. The smoke tests are there so you have something to wire into CI.
-- **Reshaping the domain model** isn't expected. Adjust it if a perf fix needs it; otherwise leave it.
+```sh
+fly deploy
+```
 
-## Time
+El deploy ejecuta migraciones:
 
-Soft cap of 2–6 hours, depending on your experience and what tooling you have available (AI agents are fine — say so in `NOTES.md` and include chat transcripts). We're looking at signal, not hours.
+```toml
+release_command = "uv run --no-sync python manage.py migrate"
+```
 
-## Deliverable
+Para cargar el seed en la base remota:
 
-Whatever's easy for you to share: a GitHub link, a [gitfront](https://gitfront.io) link, a git bundle, even `git format-patch`. Please don't open a PR against this repo.
+```sh
+fly ssh console -a backend-devops-interview -C "uv run --no-sync python manage.py seed"
+```
+
+## Validacion realizada
+
+```sh
+docker compose build
+docker compose run --rm app uv run --no-sync python manage.py migrate
+docker compose run --rm app uv run pytest
+docker compose run --rm app uv run ruff check .
+```
+
+Tambien se probaron por HTTP los endpoints principales, incluyendo posts, comentarios, usuarios y health check.
